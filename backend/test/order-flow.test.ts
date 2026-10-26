@@ -274,14 +274,26 @@ test("unavailable products cannot be ordered", async () => {
       category: "Agricultural Products",
       description: "Temporary test product used to verify stock handling.",
       price: 100,
-      available: false,
+      available: true,
+      stockQuantity: 5,
     },
   });
   testProductId = product.id;
 
-  const addedUnavailable = await addProduct(product.id, 1);
-  assert.equal(addedUnavailable.status, 201, JSON.stringify(addedUnavailable.data));
+  // enter the cart while the product is still purchasable…
+  const added = await addProduct(product.id, 1);
+  assert.equal(added.status, 201, JSON.stringify(added.data));
 
+  // …then the admin flag flips.
+  await prisma.product.update({ where: { id: product.id }, data: { available: false } });
+
+  // The cart boundary must reject further adds:
+  const addedUnavailable = await addProduct(product.id, 1);
+  assert.equal(addedUnavailable.status, 409);
+  assert.match((addedUnavailable.data as OrderBody).message ?? "", /not currently available/i);
+
+  // …and checkout REMAINS the authoritative blocker even for items that
+  // were already sitting in the cart when availability changed.
   const result = await api("/api/orders", {
     method: "POST",
     cookie,
@@ -304,14 +316,21 @@ test("archived products cannot be ordered at checkout", async () => {
       description: "Temporary archived product.",
       price: 100,
       available: true,
-      archivedAt: new Date(),
+      stockQuantity: 5,
     },
   });
   testProductId = product.id;
 
-  // Adding to the cart keeps the historical behaviour; checkout blocks it.
+  // Adding to the cart works while the product is live…
   assert.equal((await addProduct(product.id, 1)).status, 201);
 
+  // …but once archived, the cart boundary refuses further adds…
+  await prisma.product.update({ where: { id: product.id }, data: { archivedAt: new Date() } });
+  const addedArchived = await addProduct(product.id, 1);
+  assert.equal(addedArchived.status, 409);
+  assert.match((addedArchived.data as OrderBody).message ?? "", /not currently available/i);
+
+  // …and checkout still blocks items archived after they entered the cart.
   const result = await api("/api/orders", {
     method: "POST",
     cookie,

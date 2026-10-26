@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { CheckCircle, ShoppingCart } from "@phosphor-icons/react";
 import { productApi, type Product } from "../lib/api";
 import { useCart } from "../lib/cart-context";
+import { isPurchasable } from "../lib/product-purchase";
 import { ProductImage } from "./ui/product-image";
 import { ErrorState } from "./ui/error-state";
 import { ProductDetailSkeleton } from "./ui/skeleton";
@@ -44,7 +45,7 @@ export function ShopProductDetail() {
   }, [id]);
 
   async function handleAddToCart() {
-    if (!product || !product.available) return;
+    if (!product || !isPurchasable(product)) return;
     setAdding(true);
     try {
       await addItem(product.id, quantity);
@@ -116,16 +117,20 @@ export function ShopProductDetail() {
             </p>
             <p
               className={`mt-1.5 inline-flex items-center gap-1.5 text-sm ${
-                product.available ? "text-forest-600" : "text-forest-500"
+                isPurchasable(product) ? "text-forest-600" : "text-forest-500"
               }`}
             >
               <span
                 className={`size-1.5 rounded-full ${
-                  product.available ? "bg-leaf-500" : "bg-forest-300"
+                  isPurchasable(product) ? "bg-leaf-500" : "bg-forest-300"
                 }`}
                 aria-hidden="true"
               />
-              {product.available ? "Available" : "Out of stock"}
+              {isPurchasable(product)
+                ? "Available"
+                : product.available
+                  ? "Out of stock"
+                  : "Unavailable"}
             </p>
           </div>
 
@@ -138,7 +143,7 @@ export function ShopProductDetail() {
             </p>
           </div>
 
-          {product.available && (
+          {isPurchasable(product) ? (
             <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
               <div className="flex items-center rounded-full border border-forest-800/20 bg-white">
                 <button
@@ -184,6 +189,15 @@ export function ShopProductDetail() {
                     : "Add to Cart"}
               </button>
             </div>
+          ) : (
+            <p
+              className="mt-8 inline-flex items-center gap-2 rounded-full bg-forest-800/5 px-5 py-3 text-sm font-semibold text-forest-700"
+              role="status"
+            >
+              {product.available
+                ? "This product is out of stock right now. Check back soon."
+                : "This product is not currently available."}
+            </p>
           )}
         </div>
       </div>

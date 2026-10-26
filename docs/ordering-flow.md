@@ -106,6 +106,35 @@ Cart clearing: the cart is emptied **inside the same transaction** that creates 
 after the payment adapter has succeeded. A failed validation, out-of-stock item, or provider
 error leaves the cart untouched (covered by tests).
 
+### 4b. Cart-boundary stock guard (release blocker B-3)
+
+Checkout remains **the authoritative** stock validator (transactional, oversell-proof). In
+addition, the cart endpoints now reject items that cannot be purchased *at add/update time*,
+so the storefront never accumulates a cart that cannot be checked out (`backend/src/services/cart.service.ts`,
+`assertPurchasable`):
+
+| Situation at cart add / quantity update | HTTP | Message |
+| --- | --- | --- |
+| product not `available` (admin flag) or archived | 409 | `This product is not currently available.` |
+| `stockQuantity` 0 | 409 | `Sorry, "<name>" is out of stock right now.` |
+| requested cart quantity exceeds current stock | 409 | `Sorry, only <N> unit(s) of "<name>" left in stock.` |
+
+All three map to the standard `{ success: false, message }` shape. The guard is **read-only on
+inventory** — no second writer of the `available` flag, no stock mutation — so an admin
+cancellation that restores stock immediately makes the product purchasable again, and there is
+no race between availability and stock: both are read from the same product row on every
+cart write.
+
+Storefront (`src/components/shop-product-detail.tsx` + `src/lib/product-purchase.ts`): a zero-stock
+or admin-disabled product shows "Out of stock"/"Not currently available" with no Add-to-Cart
+control; the helper `isPurchasable()` gates on `available` **and** `stockQuantity > 0`. The
+backend stays the final word either way.
+
+Regression tests: `backend/test/cart-stock.test.ts` (zero-stock add, unavailable add, cap at
+stock, checkout still authoritative after a flag flip, cancellation restores purchasability)
+and `src/lib/product-purchase.test.ts`.
+
+
 ---
 
 ## 3. Checkout redirect flags and feedback

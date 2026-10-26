@@ -39,7 +39,12 @@ const validAddress = {
 async function api(
   path: string,
   options: { method?: string; cookie?: string; body?: unknown; headers?: Record<string, string> } = {}
-): Promise<{ status: number; data: unknown; setCookie: string | null }> {
+  // The shared test fetch helper widens payloads on purpose: different
+  // endpoints respond with different shapes (message / order / replay) that
+  // individual tests assert on directly. Runtime assertions below stay
+  // specific — only the helper's annotation is broad.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<{ status: number; data: any; setCookie: string | null }> {
   const headers: Record<string, string> = { ...(options.headers ?? {}) };
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (options.cookie) headers.Cookie = options.cookie;
@@ -60,7 +65,8 @@ async function placeOrder(
   paymentMethod: "cod" | "upi",
   idempotencyKey?: string,
   paymentRef?: string
-): Promise<{ status: number; data: unknown }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<{ status: number; data: any }> {
   const body: Record<string, unknown> = { ...validAddress, paymentMethod };
   if (paymentRef) body.paymentRef = paymentRef;
   const headers: Record<string, string> = {};

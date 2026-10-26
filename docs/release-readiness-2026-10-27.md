@@ -157,18 +157,11 @@ Implemented and verified (see contracts §6):
 - History bookkeeping (unchanged prior state, owner decisions): two admin migrations were
   earlier accepted via `prisma migrate resolve --applied` (with approval);
   `20260811183220_add_cart_orders` remains a rolled-back row.
-- **Blocker B-1 (critical, pre-deploy):** migrations `20261026000000_add_admin_inventory_audit`
-  and `20261027000000_add_webhook_events_and_order_idempotency` BOTH contain
-  `CREATE TABLE webhook_events` (identical definitions). Any **fresh** `prisma migrate
-  deploy` fails at the second one with MySQL 1050 — verified reproducibly on a brand-new
-  test DB. A fresh provisioning attempt also leaves the partial apply recorded as
-  unfinished (fresh DBs are recoverable only via reset; prod-style recovery would need
-  manual statement-level handling). **Decision needed:** approve replacing the duplicate
-  `CREATE TABLE` block in `20261027000000` with a comment and keeping only
-  `ALTER TABLE orders ADD COLUMN idempotency_key` + `CREATE UNIQUE INDEX
-  orders_customer_idempotency_key`. The patch was validated on a disposable DB (all 8
-  migrations then apply cleanly; seed then yields the idempotent catalog) — patch copy
-  at `/tmp/opencode/prisma-patchtest/`. No history was rewritten without approval.
+- **Blocker B-1 (critical): RESOLVED 2026-10-27 (second pass, with approval).** The
+  duplicate `CREATE TABLE webhook_events` statement in `20261027000000` was replaced by an
+  explanatory comment; fresh `prisma migrate deploy` now succeeds (verified on the
+  disposable `jhk_seedtest`, dropped afterwards) and the already-migrated dev DB remains
+  "up to date". Details under §11 B-1.
 - Backup/restore/deploy requirements: take `mysqldump --single-transaction` before deploy;
   deploy expects `DATABASE_URL` (CLI) + `DB_*` (app runtime) to point at the target DB;
   migrations run via `prisma migrate deploy` only — never `migrate dev` against shared DBs
@@ -187,35 +180,74 @@ size limit + managed path (live-verified); parameterized SQL (webhook/sweeper us
 
 Documented gaps / requirements:
 - `COOKIE_SECURE=true`, HTTPS and persistent `UPLOAD_DIR` volume are **production-mandatory**.
-- No rate limiting on customer `/api/auth/register|login` or inquiries (the limiter exists
-  and is used only on admin auth; `env.rateLimit.inquiryMax` is currently unused).
+- Rate limiting on customer `/api/auth/register|login` and inquiries was **added in the
+  second pass (B-4 fixed)**: same in-memory limiter, 10 / 15 min for auth and 5 / 15 min
+  for inquiries, per IP per path; see `docs/production-config.md`.
+- Behind a reverse proxy the backend needs `app.set("trust proxy", 1)` so per-IP limits
+  key on real client IPs (called out in `docs/production-config.md` §1).
 - Razorpay keys serve test mode only; production key rotation required at go-live.
 - DB access uses root in dev; staging/production must use a least-privilege MySQL user.
 - `/backend/dist` is not excluded from lint (config gap, cosmetic).
 
-## 11. Blockers
+## 11. Blockers — FINAL STATUS (2026-10-27, second pass)
 
-- **B-1 (critical):** duplicate `webhook_events` CREATE TABLE across two migrations —
-  fresh `prisma migrate deploy` fails; patch approved-and-validated but not applied
-  (approval required).
-- **B-2 (high):** real Razorpay webhook delivery unverified — requires the exact setup in
-  §8 in an authorized staging environment.
-- **B-3 (medium):** `available` flag not managed on auto-decrement to 0 (§7 finding).
-- **B-4 (medium):** no rate limiting on customer auth/inquiry endpoints (security hardening).
-- **B-5 (low):** admin orders page shows "No orders yet" empty state alongside the error
-  banner; admin walkthrough script asserts lowercase labels and misses "Cancel" as an
-  action (stale assertions).
-- **B-6 (low):** pre-existing lint errors in 3 storefront components (owner’s follow-up).
-- **B-7 (low):** `?search=` param silently ignored (contract is `?q=`) — document or alias.
+- **B-1 (critical): FIXED.** Duplication was `CREATE TABLE webhook_events` at line 64 of
+  `20261026000000_add_admin_inventory_audit` and line 11 of `20261027000000_...`. With
+  explicit approval the second statement was replaced by an explanatory comment; the
+  migration now carries only `ALTER TABLE orders ADD COLUMN idempotency_key` + the unique
+  index. Verified **on a fresh disposable MySQL DB** (`jhk_seedtest`, created and then
+  dropped): all 8 migrations apply and the 36-product seed runs. Verified **compatible with
+  the already-migrated dev DB**: `prisma migrate status` still reports "Database schema is
+  up to date" (9 rows: 8 finished + the historical rolled-back `20260811183220`). Only the
+  dev DB has ever had these migrations applied — no staging/production DB exists, so no
+  distribution check beyond this workspace was applicable. Checksum note: `_prisma_migrations`
+  stores the pre-edit checksum for already-applied rows; `migrate deploy` skips applied
+  migrations by name and does not re-verify checksums, so the existing DB is unaffected.
+  Checksum drift only matters to the interactive `migrate dev` workflow (discouraged on
+  shared DBs). Rollout: on staging/prod run `prisma migrate deploy` against a fresh DB —
+  documented in `docs/production-config.md` §7.
+- **B-2 (high): AWAITING STAGING EXECUTION** — procedure prepared in
+  `docs/staging-verification-razorpay-webhook.md` (dashboard config, real test-mode
+  delivery checks, signature-rejection tests, replay idempotency, reconciliation sweep,
+  evidence-recording rules with explicit "real provider delivery vs mocked" separation).
+  No delivery evidence is claimed; cannot be produced without a staging URL + Razorpay
+  dashboard access.
+- **B-3 (medium): FIXED** — coordinated backend+frontend (details in §4b of
+  `docs/ordering-flow.md`): cart-boundary guard `assertPurchasable` (409s for
+  unavailable/out-of-stock/over-stock adds and quantity updates; checkout REMAINS the
+  authoritative transactional validator, verified even for items that sneaked into the cart
+  before a flag flip); storefront gates on `available` + `stockQuantity > 0` via the new
+  shared helper `src/lib/product-purchase.ts` with "Out of stock" / "Not currently
+  available" states and no Add-to-Cart control; stock removal is untouched (no second
+  `available` writer, nothing can go stale), so a cancellation that restores stock makes
+  products purchasable again automatically. Regression: `backend/test/cart-stock.test.ts`
+  5/5 and `src/lib/product-purchase.test.ts`.
+- **B-4 (medium): FIXED** — the existing in-memory limiter now guards customer
+  `POST /api/auth/register` and `POST /api/auth/login` (10 / 15 min / IP / path) and
+  `POST /api/inquiries` (5 / 15 min / IP / path); 429s use the standard
+  `{ success: false, message: "Too many requests. Please try again later." }` shape; the
+  middleware performs no logging at all (no passwords/tokens/PII). Regression:
+  `backend/test/rate-limit.test.ts` 5/5 (burst → 429, normal single request ≤ budget →
+  passes, GET routes unaffected). Limits are env-tunable and documented in
+  `docs/production-config.md`.
+- **B-5 (low): unchanged** — admin orders page empty-state-vs-error-banner nuance + stale
+  walkthrough-script assertions (owner follow-up).
+- **B-6 (low): unchanged** — 3 pre-existing `react-hooks/set-state-in-effect` lint errors
+  in `product-detail.tsx`, `shop-catalog.tsx`, `shop-product-detail.tsx`; ownership listed
+  in `docs/production-config.md` §6.
+- **B-7 (low): unchanged** — `?search=` vs `?q=` contract (document or alias; owner decision).
+
 
 ## 12. Recommendation
 
-**READY FOR STAGING** (with B-1 resolved before first provisioning: apply the
-validated one-migration patch, or provision the staging DB from a dump of the dev schema).
+**READY FOR STAGING.** B-1 fixed (fresh provisioning verified end-to-end), B-3 and B-4
+fixed with regression suites.
 
 **NOT ready for production yet.** The customer-to-admin journey, payments (test mode),
-stock consistency and image uploads all work against the controlled environment, but
-production parity requires: B-1 resolved, B-2 webhook delivery verified in staging,
-B-3/B-4 hardening, production credentials/HTTPS/`COOKIE_SECURE`/persistent `UPLOAD_DIR`,
-a least-privilege DB user and a backup strategy, plus a data-hygiene decision on the
-dev-catalog/test remnants.
+stock consistency, rate limiting and image uploads all work against the controlled
+environment, but go-live requires: B-2 webhook delivery verified in staging per the
+prepared procedure (`docs/staging-verification-razorpay-webhook.md`), production
+credentials/HTTPS/`COOKIE_SECURE=true`/persistent `UPLOAD_DIR` (checklist:
+`docs/production-config.md`), a least-privilege DB user and a backup strategy,
+plus a data-hygiene decision on the dev-catalog/test remnants (~31 sandbox/e2e
+customers).

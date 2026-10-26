@@ -1,6 +1,7 @@
 import type { Cart, CartItem, Product } from "../generated/client/client.js";
 import { prisma } from "../config/prisma.js";
 import { addToCartSchema, type AddToCartInput } from "../schemas/cart.schema.js";
+import { ApiError } from "../utils/apiError.js";
 
 export type PublicCartItem = {
   id: number;
@@ -71,15 +72,48 @@ export async function getOrCreateCart(customerId: number): Promise<Cart> {
   return cart;
 }
 
+/**
+ * Cart-boundary stock guard (B-3, coordinated — see docs/admin-api-contract.md §6):
+ * the storefront should not accumulate a cart that cannot be checked out.
+ * Checkout/order placement REMAINS the authoritative validator (transactional,
+ * oversell-proof); this is a friendlier earlier rejection using the same stock
+ * values — no inventory business logic lives here.
+ */
+function assertPurchasable(
+  product: Pick<Product, "available" | "stockQuantity" | "name">,
+  requestedQuantity: number
+): void {
+  if (!product.available) {
+    throw new ApiError(409, "This product is not currently available.");
+  }
+  const stock = product.stockQuantity ?? 0;
+  if (stock <= 0) {
+    throw new ApiError(409, `Sorry, "${product.name}" is out of stock right now.`);
+  }
+  if (requestedQuantity > stock) {
+    throw new ApiError(409, `Sorry, only ${stock} unit${stock === 1 ? "" : "s"} of "${product.name}" left in stock.`);
+  }
+}
+
 export async function addToCart(
   customerId: number,
   input: AddToCartInput
 ): Promise<PublicCart> {
   const cart = await getOrCreateCart(customerId);
 
+  const product = await prisma.product.findUniqueOrThrow({
+    where: { id: input.productId },
+    select: { available: true, stockQuantity: true, name: true, archivedAt: true },
+  });
+  if (product.archivedAt) {
+    throw new ApiError(409, "This product is not currently available.");
+  }
+
   const existing = await prisma.cartItem.findUnique({
     where: { cartId_productId: { cartId: cart.id, productId: input.productId } },
   });
+
+  assertPurchasable(product, (existing?.quantity ?? 0) + input.quantity);
 
   if (existing) {
     await prisma.cartItem.update({
@@ -113,6 +147,14 @@ export async function updateCartItemQuantity(
   });
 
   if (!item) throw new Error("Cart item not found");
+
+  // Keep the cart honest with current stock (see assertPurchasable above);
+  // re-caps run on every update, so a restored product is purchasable again.
+  const current = await prisma.cartItem.findUniqueOrThrow({
+    where: { id: cartItemId },
+    select: { product: { select: { available: true, stockQuantity: true, name: true } } },
+  });
+  assertPurchasable(current.product, quantity);
 
   await prisma.cartItem.update({
     where: { id: cartItemId },

@@ -6,6 +6,8 @@ export type Product = {
   image: string | null;
   price: string | null;
   available: boolean;
+  /** Server stock snapshot; also always present on the API (additive type). */
+  stockQuantity?: number;
 };
 
 export type ProductListResponse = {

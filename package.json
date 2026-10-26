@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test src/lib/order-feedback.test.ts src/lib/admin-form.test.ts",
+    "test": "tsx --test src/lib/order-feedback.test.ts src/lib/admin-form.test.ts src/lib/product-purchase.test.ts",
     "test:backend": "npm --prefix backend test"
   },
   "dependencies": {

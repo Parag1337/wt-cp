@@ -5,23 +5,13 @@
 -- Unique per customer, so a duplicate submission replays the original order.
 ALTER TABLE `orders` ADD COLUMN `idempotency_key` VARCHAR(64) NULL;
 
--- CreateTable: provider webhook events. One row per provider event id; the
--- unique (provider, event_id) index is the durable idempotency guarantee for
--- Razorpay redeliveries.
-CREATE TABLE `webhook_events` (
-    `id` INTEGER NOT NULL AUTO_INCREMENT,
-    `provider` VARCHAR(32) NOT NULL DEFAULT 'razorpay',
-    `event_id` VARCHAR(64) NOT NULL,
-    `event_type` VARCHAR(64) NOT NULL,
-    `status` VARCHAR(32) NOT NULL DEFAULT 'received',
-    `note` TEXT NULL,
-    `received_at` TIMESTAMP(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
-    `processed_at` TIMESTAMP(0) NULL,
-
-    INDEX `webhook_events_status_idx`(`status`),
-    UNIQUE INDEX `webhook_events_provider_event_id`(`provider`, `event_id`),
-    PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- CreateTable removed 2026-10-27 (approved minimal fix): `webhook_events` was
+-- already created by 20261026000000_add_admin_inventory_audit with an identical
+-- definition (same columns, status index, unique (provider, event_id)). The
+-- duplicated CREATE TABLE made every fresh `prisma migrate deploy` fail with
+-- MySQL 1050. Databases that applied this migration earlier keep their recorded
+-- checksum row; `migrate deploy` skips applied migrations by name, so the
+-- corrected content only affects future fresh provisioning.
 
 -- CreateIndex: composite unique key; existing rows keep NULL keys, which are
 -- never in conflict for MySQL composite unique indexes.
