@@ -1,6 +1,10 @@
 import type { Request, Response } from "express";
+import fs from "node:fs";
+import path from "node:path";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/apiError.js";
+import { env } from "../config/env.js";
+import { getAdminProductImageValue } from "../services/admin-product.service.js";
 import { getAdminDashboard } from "../services/admin-dashboard.service.js";
 import {
   listAdminOrders,
@@ -90,7 +94,15 @@ export const restoreProduct = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const removeProductImage = asyncHandler(async (req: Request, res: Response) => {
-  res.json({ success: true, product: await setAdminProductImage(parseId(req.params.id), null) });
+  const id = parseId(req.params.id);
+  const previous = await getAdminProductImageValue(id);
+  const product = await setAdminProductImage(id, null);
+  // Best-effort cleanup of the removed local upload — only when the stored
+  // value actually pointed at our managed /uploads/products files.
+  if (previous?.startsWith("/uploads/products/")) {
+    fs.rm(path.join(env.storage.uploadDir, path.basename(previous)), { force: true }, () => undefined);
+  }
+  res.json({ success: true, product });
 });
 
 // ── Inventory ─────────────────────────────────────────────────────────────

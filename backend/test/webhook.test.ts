@@ -64,7 +64,7 @@ async function postWebhook(
   signature: string,
   eventId: string,
   contentType = "application/json"
-): Promise<{ status: number; data: any }> {
+): Promise<{ status: number; data: unknown }> {
   const response = await fetch(`${baseUrl}/api/payments/razorpay/webhook`, {
     method: "POST",
     headers: {

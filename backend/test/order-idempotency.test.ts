@@ -39,7 +39,7 @@ const validAddress = {
 async function api(
   path: string,
   options: { method?: string; cookie?: string; body?: unknown; headers?: Record<string, string> } = {}
-): Promise<{ status: number; data: any; setCookie: string | null }> {
+): Promise<{ status: number; data: unknown; setCookie: string | null }> {
   const headers: Record<string, string> = { ...(options.headers ?? {}) };
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (options.cookie) headers.Cookie = options.cookie;
@@ -60,7 +60,7 @@ async function placeOrder(
   paymentMethod: "cod" | "upi",
   idempotencyKey?: string,
   paymentRef?: string
-): Promise<{ status: number; data: any }> {
+): Promise<{ status: number; data: unknown }> {
   const body: Record<string, unknown> = { ...validAddress, paymentMethod };
   if (paymentRef) body.paymentRef = paymentRef;
   const headers: Record<string, string> = {};

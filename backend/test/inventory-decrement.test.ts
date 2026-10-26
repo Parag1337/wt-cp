@@ -30,7 +30,7 @@ const productName = `Stock Decrement ${suffix}`;
 let productId = 0;
 let adminId = 0;
 let customerAId = 0;
-let orderIdsToClean: number[] = [];
+const orderIdsToClean: number[] = [];
 const createdLedgerFromCapture: string[] = [];
 
 const codAddress: CheckoutInput = {

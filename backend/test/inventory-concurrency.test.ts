@@ -17,7 +17,7 @@ const productName = `Inventory Concurrency ${suffix}`;
 
 let productId = 0;
 let adminId = 0;
-let baseStock = 5;
+const baseStock = 5;
 
 async function admin() {
   const admin = await prisma.customer.findFirst({

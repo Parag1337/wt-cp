@@ -86,7 +86,7 @@ export const uploadImageHandler = asyncHandler(async (req: Request, res: Respons
   if (isNaN(id)) throw new ApiError(400, "Invalid product ID.");
   const file = (req as Request & { file?: Express.Multer.File }).file;
   if (!file) throw new ApiError(400, "No image file provided.");
-  const url = `/uploads/${file.filename}`;
+  const url = `/uploads/products/${file.filename}`;
   const product = await replaceProductImageAdmin(id, url);
   res.json({ success: true, product, imageUrl: url });
 });

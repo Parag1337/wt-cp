@@ -31,7 +31,7 @@ app.use("/api/payments", paymentRouter);
 app.use(express.json({ limit: "100kb" }));
 app.use(cookieParser());
 
-app.use("/uploads", express.static(env.storage.uploadDir));
+app.use("/uploads", express.static(env.storage.staticRoot));
 
 app.get("/api/health", (_req, res) => {
   res.json({ success: true, message: "OK" });

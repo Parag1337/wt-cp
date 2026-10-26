@@ -1,4 +1,5 @@
 import "dotenv/config";
+import path from "node:path";
 
 function required(key: string): string {
   const value = process.env[key];
@@ -35,7 +36,17 @@ export const env = {
   },
   storage: {
     provider: process.env.STORAGE_PROVIDER ?? "local",
-    uploadDir: process.env.UPLOAD_DIR ?? "public/uploads",
+    // Canonical layout: UPLOAD_DIR is the static root served at `/uploads`;
+    // product image files always live in its `products/` subfolder so the
+    // public URL is `/uploads/products/<file>` for any deployment override.
+    // (UPLOAD_DIR unset → <cwd>/uploads; persistent volumes set UPLOAD_DIR.)
+    uploadDir: path.join(
+      process.env.UPLOAD_DIR?.trim() ? path.resolve(process.env.UPLOAD_DIR.trim()) : path.join(process.cwd(), "uploads"),
+      "products"
+    ),
+    staticRoot: process.env.UPLOAD_DIR?.trim()
+      ? path.resolve(process.env.UPLOAD_DIR.trim())
+      : path.join(process.cwd(), "uploads"),
     maxFileSizeBytes: Number(process.env.MAX_UPLOAD_BYTES ?? 5 * 1024 * 1024),
     allowedMimeTypes: ["image/jpeg", "image/png", "image/webp", "image/gif"],
   },

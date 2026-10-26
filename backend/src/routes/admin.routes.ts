@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import multer from "multer";
 import * as admin from "../controllers/admin.controller.js";
+import { env } from "../config/env.js";
 import { authenticate, requireAdmin } from "../middleware/auth.middleware.js";
 import { setAdminProductImage, getAdminProductImageValue } from "../services/admin-product.service.js";
 import { ApiError } from "../utils/apiError.js";
@@ -11,10 +12,8 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 
 const router = Router();
 
-/** Uploads live on disk, never in MySQL. Path is overridable for deployment. */
-export const UPLOAD_DIR = path.resolve(
-  process.env.UPLOAD_DIR?.trim() || path.join(process.cwd(), "uploads", "products")
-);
+/** Uploads live on disk, never in MySQL. Path is overridable for deployment (UPLOAD_DIR). */
+export const UPLOAD_DIR = env.storage.uploadDir;
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const EXTENSIONS: Record<string, string> = {
