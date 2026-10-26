@@ -19,6 +19,7 @@ model Customer {
 
   carts   Cart[]
   orders  Order[]
+  addresses Address[]
   stockAdjustments StockAdjustment[]
   orderStatusChanges OrderStatusHistory[]
 
@@ -187,4 +188,27 @@ model WebhookEvent {
   @@unique([provider, eventId], map: "webhook_events_provider_event_id")
   @@index([status], map: "webhook_events_status_idx")
   @@map("webhook_events")
+}
+
+
+model Address {
+  id           Int      @id @default(autoincrement())
+  customerId   Int      @map("customer_id") @db.Int
+  fullName     String   @map("full_name") @db.VarChar(120)
+  phone        String   @map("phone") @db.VarChar(20)
+  addressLine1 String   @map("address_line1") @db.VarChar(255)
+  addressLine2 String?  @map("address_line2") @db.VarChar(255)
+  city         String   @db.VarChar(100)
+  state        String   @default("Maharashtra") @db.VarChar(100)
+  pincode      String   @db.VarChar(10)
+  landmark     String?  @map("landmark") @db.VarChar(255)
+  label        String?  @map("label") @db.VarChar(32)
+  isDefault    Boolean  @default(false) @map("is_default")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId], map: "addresses_customer_id_idx")
+  @@map("addresses")
 }

@@ -74,6 +74,8 @@ export type CheckoutPayload = {
   pincode: string;
   paymentMethod: PaymentMethod;
   paymentRef?: string;
+  addressId?: number;
+  saveAddress?: boolean;
 };
 
 /** Error with the HTTP status preserved so callers can branch on 401/404/409. */

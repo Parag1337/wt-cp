@@ -377,6 +377,32 @@ async function placeOrder(
     throw new ApiError(400, "Enter the 12-digit UPI transaction reference.");
   }
 
+  // Resolve delivery address. A selected saved address overrides the entered
+  // fields and is verified for ownership.
+  let delivery = {
+    fullName: input.fullName,
+    phone: input.phone,
+    addressLine1: input.addressLine1,
+    addressLine2: input.addressLine2 || null,
+    city: input.city,
+    state: input.state,
+    pincode: input.pincode,
+  };
+  if (input.addressId) {
+    const saved = await prisma.address.findFirst({
+      where: { id: input.addressId, customerId },
+    });
+    if (!saved) throw new ApiError(404, "Saved address not found.");
+    delivery = {
+      fullName: saved.fullName,
+      phone: saved.phone,
+      addressLine1: saved.addressLine1,
+      addressLine2: saved.addressLine2,
+      city: saved.city,
+      state: saved.state,
+      pincode: saved.pincode,
+    };
+  }
   const total = cart.items.reduce((sum, item) => {
     const price = item.product.price ? parseFloat(item.product.price.toString()) : 0;
     return sum + price * item.quantity;
@@ -396,13 +422,13 @@ async function placeOrder(
         customerId,
         status: "pending",
         total,
-        fullName: input.fullName,
-        phone: input.phone,
-        addressLine1: input.addressLine1,
-        addressLine2: input.addressLine2 || null,
-        city: input.city,
-        state: input.state,
-        pincode: input.pincode,
+        fullName: delivery.fullName,
+        phone: delivery.phone,
+        addressLine1: delivery.addressLine1,
+        addressLine2: delivery.addressLine2,
+        city: delivery.city,
+        state: delivery.state,
+        pincode: delivery.pincode,
         paymentMethod: input.paymentMethod,
         paymentStatus: payment.paymentStatus,
         paymentRef:
@@ -460,6 +486,24 @@ async function placeOrder(
 
   const full = await loadOrder(order.id);
 
+  if (input.saveAddress && !input.addressId) {
+    const existingCount = await prisma.address.count({ where: { customerId } });
+    await prisma.address.create({
+      data: {
+        customerId,
+        fullName: delivery.fullName,
+        phone: delivery.phone,
+        addressLine1: delivery.addressLine1,
+        addressLine2: delivery.addressLine2,
+        city: delivery.city,
+        state: delivery.state,
+        pincode: delivery.pincode,
+        landmark: null,
+        label: null,
+        isDefault: existingCount === 0,
+      },
+    });
+  }
   return {
     order: toPublicOrder(full),
     razorpay:

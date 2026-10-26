@@ -27,6 +27,11 @@ export const checkoutSchema = z
       .trim()
       .regex(/^\d{6}$/, "Enter a valid 6-digit pincode."),
     paymentMethod: paymentMethodSchema.default("cod"),
+  // Optional saved address to use for this order (must belong to customer).
+  addressId: z.number().int().positive().optional(),
+  // When true (and no addressId), persist the entered delivery address to the
+  // customer's saved addresses for future orders.
+  saveAddress: z.boolean().optional(),
     // UPI transaction reference (12-digit) entered by the customer after paying.
     // Required only when paymentMethod is "upi".
     paymentRef: z.string().trim().max(255).optional().default(""),

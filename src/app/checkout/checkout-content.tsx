@@ -1,10 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCart } from "../../lib/cart-context";
 import { useAuth } from "../../lib/auth-context";
+import { addressApi, type SavedAddress } from "../../lib/address-api";
 import { orderApi, type Order, type RazorpayOrder } from "../../lib/order-api";
 import { openRazorpayCheckout } from "../../lib/razorpay-checkout";
 import { PAYMENT_METHODS, type PaymentMethod } from "../../lib/payment";
@@ -66,6 +67,31 @@ export default function CheckoutContent() {
   const [city, setCity] = useState("");
   const [state, setState] = useState("Maharashtra");
   const [pincode, setPincode] = useState("");
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
+  const [saveAddress, setSaveAddress] = useState(false);
+
+  useEffect(() => {
+    if (authStatus !== "authenticated") return;
+    addressApi
+      .list()
+      .then((data) => {
+        const list = data.addresses ?? [];
+        setSavedAddresses(list);
+        const def = list.find((a) => a.isDefault) ?? list[0];
+        if (def) {
+          setSelectedAddressId(def.id);
+          setFullName(def.fullName);
+          setPhone(def.phone);
+          setAddressLine1(def.addressLine1);
+          setAddressLine2(def.addressLine2 ?? "");
+          setCity(def.city);
+          setState(def.state);
+          setPincode(def.pincode);
+        }
+      })
+      .catch(() => {});
+  }, [authStatus]);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cod");
   const [paymentRef, setPaymentRef] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -146,6 +172,8 @@ export default function CheckoutContent() {
           pincode: pincode.trim(),
           paymentMethod,
           paymentRef: paymentRef.trim(),
+          addressId: selectedAddressId ?? undefined,
+          saveAddress: selectedAddressId === null ? saveAddress : false,
         },
         { idempotencyKey }
       );
@@ -215,6 +243,57 @@ export default function CheckoutContent() {
         {/* Address */}
         <div className="rounded-2xl border border-forest-800/10 bg-white p-6">
           <h2 className="font-display text-lg font-bold text-ink">Delivery Address</h2>
+          {savedAddresses.length > 0 && (
+            <div className="mb-5">
+              <label htmlFor="co-saved-address" className={labelCls}>Saved address</label>
+              <select
+                id="co-saved-address"
+                value={selectedAddressId ?? ""}
+                onChange={(e) => {
+                  const id = e.target.value ? Number(e.target.value) : null;
+                  setSelectedAddressId(id);
+                  if (id === null) {
+                    setFullName("");
+                    setPhone("");
+                    setAddressLine1("");
+                    setAddressLine2("");
+                    setCity("");
+                    setState("Maharashtra");
+                    setPincode("");
+                    return;
+                  }
+                  const a = savedAddresses.find((x) => x.id === id);
+                  if (a) {
+                    setFullName(a.fullName);
+                    setPhone(a.phone);
+                    setAddressLine1(a.addressLine1);
+                    setAddressLine2(a.addressLine2 ?? "");
+                    setCity(a.city);
+                    setState(a.state);
+                    setPincode(a.pincode);
+                  }
+                }}
+                className={inputCls}
+              >
+                <option value="">Enter a new address</option>
+                {savedAddresses.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {(a.label || "Address") + " — " + a.fullName + ", " + a.city}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {selectedAddressId === null && (
+            <label className="mb-5 flex items-center gap-2 text-sm text-forest-800">
+              <input
+                type="checkbox"
+                checked={saveAddress}
+                onChange={(e) => setSaveAddress(e.target.checked)}
+              />
+              Save this address to my profile
+            </label>
+          )}
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="co-name" className={labelCls}>Full name</label>

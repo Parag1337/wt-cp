@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../lib/auth-context";
 import { authApi } from "../../lib/auth";
+import { addressApi, type SavedAddress } from "../../lib/address-api";
 import { PageHeader } from "../../components/ui/page-header";
 import { Skeleton } from "../../components/ui/skeleton";
 import { Button } from "../../components/button";
@@ -64,6 +65,11 @@ export default function ProfileContent() {
   const [pwError, setPwError] = useState<string | null>(null);
   const [pwSuccess, setPwSuccess] = useState<string | null>(null);
   const [pwSaving, setPwSaving] = useState(false);
+  const [addresses, setAddresses] = useState<SavedAddress[]>([]);
+
+  useEffect(() => {
+    addressApi.list().then((d) => setAddresses(d.addresses ?? [])).catch(() => {});
+  }, []);
 
   if (status === "loading" || !customer) {
     return <ProfileSkeleton />;
@@ -115,6 +121,12 @@ export default function ProfileContent() {
       href: "/orders",
       label: "View Orders",
       description: "Check your order history and status",
+      icon: <ClipboardText size={22} weight="bold" aria-hidden="true" />,
+    },
+    {
+      href: "#addresses",
+      label: "Saved Addresses",
+      description: "Manage your delivery addresses",
       icon: <ClipboardText size={22} weight="bold" aria-hidden="true" />,
     },
     {
@@ -300,6 +312,59 @@ export default function ProfileContent() {
               </div>
             </div>
 
+            <div id="addresses" className="mt-8 rounded-2xl border border-forest-800/10 bg-white p-6 shadow-sm md:p-8">
+              <h3 className="font-display text-base font-bold text-ink">Saved Addresses</h3>
+              {addresses.length === 0 ? (
+                <p className="mt-3 text-sm text-forest-700">No saved addresses yet.</p>
+              ) : (
+                <ul className="mt-4 space-y-3">
+                  {addresses.map((a) => (
+                    <li key={a.id} className="rounded-xl border border-forest-800/10 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-ink">
+                            {a.label || "Address"} {a.isDefault ? "(Default)" : ""}
+                          </p>
+                          <p className="text-sm text-forest-700">
+                            {a.fullName} • {a.phone}
+                          </p>
+                          <p className="text-sm text-forest-700">
+                            {a.addressLine1}
+                            {a.addressLine2 ? `, ${a.addressLine2}` : ""}, {a.city}, {a.state} - {a.pincode}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          {!a.isDefault && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await addressApi.setDefault(a.id);
+                                const d = await addressApi.list();
+                                setAddresses(d.addresses ?? []);
+                              }}
+                              className="text-xs font-semibold text-forest-700 underline"
+                            >
+                              Set default
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await addressApi.remove(a.id);
+                              const d = await addressApi.list();
+                              setAddresses(d.addresses ?? []);
+                            }}
+                            className="text-xs font-semibold text-red-600 underline"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
             <aside>
               <h3 className="mb-3 font-display text-base font-bold text-ink">
                 Quick Actions
