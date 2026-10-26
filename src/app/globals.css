@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-manrope);
+  --font-display: var(--font-poppins);
+
+  --color-forest-50: #f2f7f2;
+  --color-forest-100: #e2eee3;
+  --color-forest-200: #c5dcc8;
+  --color-forest-300: #9bc2a0;
+  --color-forest-400: #6ba173;
+  --color-forest-500: #4a8555;
+  --color-forest-600: #386a43;
+  --color-forest-700: #2f5638;
+  --color-forest-800: #284530;
+  --color-forest-900: #21392a;
+  --color-forest-950: #102011;
+
+  --color-leaf-50: #f4faf2;
+  --color-leaf-100: #e6f4e2;
+  --color-leaf-200: #cde8c7;
+  --color-leaf-300: #a7d59e;
+  --color-leaf-400: #7cba71;
+  --color-leaf-500: #5a9e4e;
+  --color-leaf-600: #45813c;
+
+  --color-gold-300: #f7c96b;
+  --color-gold-400: #f2b43d;
+  --color-gold-500: #e29a1f;
+  --color-gold-600: #c47e14;
+
+  --color-cream-50: #fbfaf6;
+  --color-cream-100: #f5f3ea;
+  --color-cream-200: #eae6d8;
+
+  --color-ink: #1f2b20;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  font-family: var(--font-manrope);
+}
+
+::selection {
+  background-color: var(--color-leaf-200);
+}
+
+.container-site {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 80rem;
+  padding-inline: 1rem;
+}
+
+@media (min-width: 640px) {
+  .container-site {
+    padding-inline: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container-site {
+    padding-inline: 2rem;
+  }
+}
+
+@keyframes badge-pop {
+  0% {
+    transform: scale(0.5);
+  }
+  60% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .badge-pop {
+    animation: badge-pop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
