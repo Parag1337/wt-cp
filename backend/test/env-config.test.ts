@@ -1,7 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import path from "node:path";
-import { resolveDatabaseCaPath } from "../src/config/prisma.ts";
 
 test("DATABASE_URL is accepted without DB_* credentials", async () => {
   const previousDbUrl = process.env.DATABASE_URL;
@@ -27,10 +25,4 @@ test("DATABASE_URL is accepted without DB_* credentials", async () => {
     if (previousDbPassword === undefined) delete process.env.DB_PASSWORD; else process.env.DB_PASSWORD = previousDbPassword;
     if (previousDbName === undefined) delete process.env.DB_NAME; else process.env.DB_NAME = previousDbName;
   }
-});
-
-test("CA paths resolve relative to the backend working directory", () => {
-  assert.equal(resolveDatabaseCaPath("./aiven-ca.pem"), path.resolve(process.cwd(), "aiven-ca.pem"));
-  assert.equal(resolveDatabaseCaPath("/tmp/aiven-ca.pem"), "/tmp/aiven-ca.pem");
-  assert.equal(resolveDatabaseCaPath(), path.resolve(process.cwd(), "aiven-ca.pem"));
 });

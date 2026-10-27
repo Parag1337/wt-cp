@@ -4,15 +4,25 @@ import { PrismaClient } from "../generated/client/client.js";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { env } from "./env.js";
 
-export function resolveDatabaseCaPath(rawPath?: string): string {
-  const configuredPath = rawPath?.trim();
-  if (!configuredPath) {
-    return path.resolve(process.cwd(), "aiven-ca.pem");
+function resolveTlsCa(): string {
+  const configured = process.env.DB_SSL_CA_PATH?.trim();
+  const candidates = new Set<string>();
+
+  if (configured) {
+    candidates.add(path.isAbsolute(configured) ? configured : path.resolve(process.cwd(), configured));
   }
 
-  return path.isAbsolute(configuredPath)
-    ? configuredPath
-    : path.resolve(process.cwd(), configuredPath);
+  candidates.add(path.resolve(process.cwd(), "aiven-ca.pem"));
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  throw new Error(
+    `No database CA certificate found. Checked: ${Array.from(candidates).join(", ")}. Set DB_SSL_CA_PATH to a valid file path or add aiven-ca.pem to the backend directory.`
+  );
 }
 
 const adapter = new PrismaMariaDb(
@@ -32,7 +42,7 @@ const adapter = new PrismaMariaDb(
         !["localhost", "127.0.0.1"].includes(env.database.host);
       if (!useTls) return undefined;
 
-      const caPath = resolveDatabaseCaPath(process.env.DB_SSL_CA_PATH);
+      const caPath = resolveTlsCa();
       const ca = fs.readFileSync(caPath, "utf8");
       return { ca, rejectUnauthorized: true };
     })(),
