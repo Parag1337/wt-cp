@@ -32,8 +32,8 @@ function notify() {
   listeners.forEach((l) => l());
 }
 
-function setCartState(cart: Cart, status: CartStatus) {
-  currentCart = cart;
+function setCartState(cart: Cart | undefined | null, status: CartStatus) {
+  currentCart = cart ?? EMPTY_CART;
   currentStatus = status;
   notify();
 }
@@ -66,7 +66,7 @@ function useCartStore(): CartContextValue {
     }
     try {
       const data = await cartApi.get();
-      setCartState(data.cart, "ready");
+      setCartState(data?.cart ?? EMPTY_CART, "ready");
     } catch {
       setCartState(EMPTY_CART, "error");
     }
@@ -80,7 +80,7 @@ function useCartStore(): CartContextValue {
     async (productId: number, quantity = 1) => {
       if (authStatus !== "authenticated") return;
       const data = await cartApi.add(productId, quantity);
-      setCartState(data.cart, "ready");
+      setCartState(data?.cart ?? EMPTY_CART, "ready");
     },
     [authStatus]
   );
@@ -89,7 +89,7 @@ function useCartStore(): CartContextValue {
     async (itemId: number, quantity: number) => {
       if (authStatus !== "authenticated") return;
       const data = await cartApi.update(itemId, quantity);
-      setCartState(data.cart, "ready");
+      setCartState(data?.cart ?? EMPTY_CART, "ready");
     },
     [authStatus]
   );
@@ -98,7 +98,7 @@ function useCartStore(): CartContextValue {
     async (itemId: number) => {
       if (authStatus !== "authenticated") return;
       const data = await cartApi.remove(itemId);
-      setCartState(data.cart, "ready");
+      setCartState(data?.cart ?? EMPTY_CART, "ready");
     },
     [authStatus]
   );
@@ -106,12 +106,12 @@ function useCartStore(): CartContextValue {
   const clear = useCallback(async () => {
     if (authStatus !== "authenticated") return;
     const data = await cartApi.clear();
-    setCartState(data.cart, "ready");
+    setCartState(data?.cart ?? EMPTY_CART, "ready");
   }, [authStatus]);
 
   const isInCart = useCallback(
-    (productId: number) => cart.items.some((item) => item.productId === productId),
-    [cart.items]
+    (productId: number) => (cart?.items ?? []).some((item) => item.productId === productId),
+    [cart]
   );
 
   return { status, cart, refresh, addItem, updateItem, removeItem, clear, isInCart };

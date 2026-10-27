@@ -57,6 +57,13 @@ export const env = {
   },
 };
 
-export const databaseUrl = `mysql://${encodeURIComponent(
-  env.database.user
-)}:${encodeURIComponent(env.database.password)}@${env.database.host}:${env.database.port}/${env.database.name}?connection_limit=5`;
+// Prefer an explicitly provided DATABASE_URL (e.g. the Aiven connection URI with
+// TLS parameters). Fall back to assembling one from the DB_* variables so local
+// development keeps working. SSL verification is never disabled: production URIs
+// must carry `sslaccept=strict` (Prisma) and the runtime adapter enables
+// `rejectUnauthorized`.
+export const databaseUrl =
+  process.env.DATABASE_URL?.trim() ||
+  `mysql://${encodeURIComponent(env.database.user)}:${encodeURIComponent(
+    env.database.password
+  )}@${env.database.host}:${env.database.port}/${env.database.name}?sslaccept=strict&connection_limit=5`;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../lib/auth-context";
 import { authApi } from "../../lib/auth";
@@ -66,10 +66,162 @@ export default function ProfileContent() {
   const [pwSuccess, setPwSuccess] = useState<string | null>(null);
   const [pwSaving, setPwSaving] = useState(false);
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
+  const [addressesLoading, setAddressesLoading] = useState(true);
+  const [addressesError, setAddressesError] = useState<string | null>(null);
+  const [addressSuccess, setAddressSuccess] = useState<string | null>(null);
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<SavedAddress | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [deletingAddress, setDeletingAddress] = useState(false);
+
+  // form state
+  const [formFullName, setFormFullName] = useState("");
+  const [formPhone, setFormPhone] = useState("");
+  const [formAddressLine1, setFormAddressLine1] = useState("");
+  const [formAddressLine2, setFormAddressLine2] = useState("");
+  const [formCity, setFormCity] = useState("");
+  const [formState, setFormState] = useState("Maharashtra");
+  const [formPincode, setFormPincode] = useState("");
+  const [formLandmark, setFormLandmark] = useState("");
+  const [formIsDefault, setFormIsDefault] = useState(false);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  const addressSectionRef = useRef<HTMLDivElement>(null);
+
+  async function loadAddresses() {
+    setAddressesLoading(true);
+    setAddressesError(null);
+    try {
+      const data = await addressApi.list();
+      setAddresses(data.addresses ?? []);
+    } catch (err) {
+      setAddressesError(err instanceof Error ? err.message : "Couldn't load addresses.");
+    } finally {
+      setAddressesLoading(false);
+    }
+  }
 
   useEffect(() => {
-    addressApi.list().then((d) => setAddresses(d.addresses ?? [])).catch(() => {});
+    loadAddresses();
   }, []);
+
+  // Scroll to addresses section when hash present (including quick action).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const scrollToAddresses = () => {
+      if (window.location.hash === "#addresses" && addressSectionRef.current) {
+        addressSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    };
+    scrollToAddresses();
+    window.addEventListener("hashchange", scrollToAddresses);
+    return () => window.removeEventListener("hashchange", scrollToAddresses);
+  }, []);
+
+  function openAddForm() {
+    setEditingAddress(null);
+    setFormFullName(customer?.fullName ?? "");
+    setFormPhone(customer?.phone ?? "");
+    setFormAddressLine1("");
+    setFormAddressLine2("");
+    setFormCity("");
+    setFormState("Maharashtra");
+    setFormPincode("");
+    setFormLandmark("");
+    setFormIsDefault(addresses.length === 0);
+    setFormErrors({});
+    setAddressSuccess(null);
+    setShowAddressForm(true);
+  }
+
+  function openEditForm(a: SavedAddress) {
+    setEditingAddress(a);
+    setFormFullName(a.fullName);
+    setFormPhone(a.phone);
+    setFormAddressLine1(a.addressLine1);
+    setFormAddressLine2(a.addressLine2 ?? "");
+    setFormCity(a.city);
+    setFormState(a.state);
+    setFormPincode(a.pincode);
+    setFormLandmark(a.landmark ?? "");
+    setFormIsDefault(a.isDefault);
+    setFormErrors({});
+    setAddressSuccess(null);
+    setShowAddressForm(true);
+  }
+
+  function closeForm() {
+    setShowAddressForm(false);
+    setEditingAddress(null);
+    setFormErrors({});
+  }
+
+  function validateForm(): boolean {
+    const next: Record<string, string> = {};
+    if (!formFullName.trim() || formFullName.trim().length < 2) next.fullName = "Enter your full name.";
+    if (!/^[6-9]\d{9}$/.test(formPhone.trim())) next.phone = "Enter a valid 10-digit mobile number.";
+    if (!formAddressLine1.trim() || formAddressLine1.trim().length < 5) next.addressLine1 = "Enter your street address.";
+    if (!formCity.trim() || formCity.trim().length < 2) next.city = "Enter your city.";
+    if (!formState.trim() || formState.trim().length < 2) next.state = "Enter your state.";
+    if (!/^\d{6}$/.test(formPincode.trim())) next.pincode = "Enter a valid 6-digit pincode.";
+    setFormErrors(next);
+    return Object.keys(next).length === 0;
+  }
+
+  async function handleSaveAddress(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!validateForm()) return;
+    setSavingAddress(true);
+    setAddressSuccess(null);
+    const payload = {
+      fullName: formFullName.trim(),
+      phone: formPhone.trim(),
+      addressLine1: formAddressLine1.trim(),
+      addressLine2: formAddressLine2.trim(),
+      city: formCity.trim(),
+      state: formState.trim() || "Maharashtra",
+      pincode: formPincode.trim(),
+      landmark: formLandmark.trim(),
+      isDefault: formIsDefault,
+    };
+    try {
+      if (editingAddress) {
+        await addressApi.update(editingAddress.id, payload);
+        setAddressSuccess("Address updated successfully.");
+      } else {
+        await addressApi.create(payload);
+        setAddressSuccess("Address saved successfully.");
+      }
+      await loadAddresses();
+      closeForm();
+    } catch (err) {
+      setFormErrors({ form: err instanceof Error ? err.message : "Couldn't save address." });
+    } finally {
+      setSavingAddress(false);
+    }
+  }
+
+  async function handleDeleteAddress(id: number) {
+    setDeletingAddress(true);
+    try {
+      await addressApi.remove(id);
+      setDeleteConfirmId(null);
+      setAddressSuccess("Address deleted.");
+      await loadAddresses();
+    } catch (err) {
+      setAddressesError(err instanceof Error ? err.message : "Couldn't delete address.");
+    } finally {
+      setDeletingAddress(false);
+    }
+  }
+
+  function handleQuickAddresses() {
+    if (addressSectionRef.current) {
+      addressSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    window.history.replaceState(null, "", "#addresses");
+  }
 
   if (status === "loading" || !customer) {
     return <ProfileSkeleton />;
@@ -121,12 +273,6 @@ export default function ProfileContent() {
       href: "/orders",
       label: "View Orders",
       description: "Check your order history and status",
-      icon: <ClipboardText size={22} weight="bold" aria-hidden="true" />,
-    },
-    {
-      href: "#addresses",
-      label: "Saved Addresses",
-      description: "Manage your delivery addresses",
       icon: <ClipboardText size={22} weight="bold" aria-hidden="true" />,
     },
     {
@@ -312,35 +458,78 @@ export default function ProfileContent() {
               </div>
             </div>
 
-            <div id="addresses" className="mt-8 rounded-2xl border border-forest-800/10 bg-white p-6 shadow-sm md:p-8">
-              <h3 className="font-display text-base font-bold text-ink">Saved Addresses</h3>
-              {addresses.length === 0 ? (
-                <p className="mt-3 text-sm text-forest-700">No saved addresses yet.</p>
+            <div
+              id="addresses"
+              ref={addressSectionRef}
+              className="mt-8 rounded-2xl border border-forest-800/10 bg-white p-6 shadow-sm md:p-8"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-display text-base font-bold text-ink">
+                  Saved Addresses
+                </h3>
+                <Button type="button" variant="outline" size="md" onClick={openAddForm}>
+                  + Add New Address
+                </Button>
+              </div>
+
+              {addressSuccess && (
+                <p className="mt-3 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700">
+                  {addressSuccess}
+                </p>
+              )}
+              {addressesError && (
+                <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">
+                  {addressesError}
+                </p>
+              )}
+
+              {addressesLoading ? (
+                <p className="mt-4 text-sm text-forest-700">Loading addresses…</p>
+              ) : addresses.length === 0 ? (
+                <div className="mt-4 rounded-xl border border-dashed border-forest-800/20 p-6 text-center">
+                  <p className="text-sm text-forest-700">No saved addresses yet.</p>
+                  <Button type="button" className="mt-4" onClick={openAddForm}>
+                    + Add New Address
+                  </Button>
+                </div>
               ) : (
                 <ul className="mt-4 space-y-3">
                   {addresses.map((a) => (
                     <li key={a.id} className="rounded-xl border border-forest-800/10 p-4">
                       <div className="flex items-start justify-between gap-3">
-                        <div>
+                        <div className="min-w-0">
                           <p className="text-sm font-semibold text-ink">
-                            {a.label || "Address"} {a.isDefault ? "(Default)" : ""}
+                            {a.fullName}
+                            {a.isDefault ? " (Default)" : ""}
                           </p>
-                          <p className="text-sm text-forest-700">
-                            {a.fullName} • {a.phone}
-                          </p>
-                          <p className="text-sm text-forest-700">
+                          <p className="text-sm text-forest-700">{a.phone}</p>
+                          <p className="mt-1 text-sm text-forest-700">
                             {a.addressLine1}
-                            {a.addressLine2 ? `, ${a.addressLine2}` : ""}, {a.city}, {a.state} - {a.pincode}
+                            {a.addressLine2 ? `, ${a.addressLine2}` : ""}
+                          </p>
+                          {a.landmark && (
+                            <p className="text-sm text-forest-700">
+                              Landmark: {a.landmark}
+                            </p>
+                          )}
+                          <p className="text-sm text-forest-700">
+                            {a.city}, {a.state} - {a.pincode}
                           </p>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex flex-col items-end gap-2">
                           {!a.isDefault && (
                             <button
                               type="button"
                               onClick={async () => {
-                                await addressApi.setDefault(a.id);
-                                const d = await addressApi.list();
-                                setAddresses(d.addresses ?? []);
+                                try {
+                                  await addressApi.setDefault(a.id);
+                                  await loadAddresses();
+                                  setAddressSuccess("Default address updated.");
+                                } catch (err) {
+                                  setAddressesError(
+                                    err instanceof Error ? err.message : "Couldn't update default."
+                                  );
+                                }
                               }}
                               className="text-xs font-semibold text-forest-700 underline"
                             >
@@ -349,27 +538,217 @@ export default function ProfileContent() {
                           )}
                           <button
                             type="button"
-                            onClick={async () => {
-                              await addressApi.remove(a.id);
-                              const d = await addressApi.list();
-                              setAddresses(d.addresses ?? []);
-                            }}
+                            onClick={() => openEditForm(a)}
+                            className="text-xs font-semibold text-forest-700 underline"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteConfirmId(a.id)}
                             className="text-xs font-semibold text-red-600 underline"
                           >
                             Delete
                           </button>
                         </div>
                       </div>
+                      {deleteConfirmId === a.id && (
+                        <div className="mt-3 rounded-lg bg-red-50 p-3">
+                          <p className="text-sm text-red-700">
+                            Delete this address? This cannot be undone.
+                          </p>
+                          <div className="mt-2 flex gap-2">
+                            <Button
+                              type="button"
+                              size="md"
+                              variant="outline"
+                              disabled={deletingAddress}
+                              onClick={() => handleDeleteAddress(a.id)}
+                            >
+                              {deletingAddress ? "Deleting…" : "Confirm Delete"}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="md"
+                              variant="outline"
+                              onClick={() => setDeleteConfirmId(null)}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>
               )}
+
+              {showAddressForm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+                  <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+                    <h4 className="font-display text-lg font-bold text-ink">
+                      {editingAddress ? "Edit Address" : "Add New Address"}
+                    </h4>
+                    <form className="mt-4 space-y-3" onSubmit={handleSaveAddress}>
+                      <div>
+                        <label className="mb-1 block text-sm font-semibold text-forest-800">
+                          Full name
+                        </label>
+                        <input
+                          value={formFullName}
+                          onChange={(e) => setFormFullName(e.target.value)}
+                          className="w-full rounded-xl border border-forest-800/20 px-4 py-2.5 text-sm"
+                        />
+                        {formErrors.fullName && (
+                          <p className="mt-1 text-xs text-red-600">{formErrors.fullName}</p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-semibold text-forest-800">
+                          Phone number
+                        </label>
+                        <input
+                          value={formPhone}
+                          onChange={(e) => setFormPhone(e.target.value)}
+                          inputMode="numeric"
+                          maxLength={10}
+                          className="w-full rounded-xl border border-forest-800/20 px-4 py-2.5 text-sm"
+                        />
+                        {formErrors.phone && (
+                          <p className="mt-1 text-xs text-red-600">{formErrors.phone}</p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-semibold text-forest-800">
+                          House/flat & street
+                        </label>
+                        <input
+                          value={formAddressLine1}
+                          onChange={(e) => setFormAddressLine1(e.target.value)}
+                          className="w-full rounded-xl border border-forest-800/20 px-4 py-2.5 text-sm"
+                        />
+                        {formErrors.addressLine1 && (
+                          <p className="mt-1 text-xs text-red-600">{formErrors.addressLine1}</p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-semibold text-forest-800">
+                          Area/locality (optional)
+                        </label>
+                        <input
+                          value={formAddressLine2}
+                          onChange={(e) => setFormAddressLine2(e.target.value)}
+                          className="w-full rounded-xl border border-forest-800/20 px-4 py-2.5 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-semibold text-forest-800">
+                          Landmark (optional)
+                        </label>
+                        <input
+                          value={formLandmark}
+                          onChange={(e) => setFormLandmark(e.target.value)}
+                          className="w-full rounded-xl border border-forest-800/20 px-4 py-2.5 text-sm"
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <div>
+                          <label className="mb-1 block text-sm font-semibold text-forest-800">
+                            City
+                          </label>
+                          <input
+                            value={formCity}
+                            onChange={(e) => setFormCity(e.target.value)}
+                            className="w-full rounded-xl border border-forest-800/20 px-4 py-2.5 text-sm"
+                          />
+                          {formErrors.city && (
+                            <p className="mt-1 text-xs text-red-600">{formErrors.city}</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-sm font-semibold text-forest-800">
+                            State
+                          </label>
+                          <input
+                            value={formState}
+                            onChange={(e) => setFormState(e.target.value)}
+                            className="w-full rounded-xl border border-forest-800/20 px-4 py-2.5 text-sm"
+                          />
+                          {formErrors.state && (
+                            <p className="mt-1 text-xs text-red-600">{formErrors.state}</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-sm font-semibold text-forest-800">
+                            PIN code
+                          </label>
+                          <input
+                            value={formPincode}
+                            onChange={(e) => setFormPincode(e.target.value)}
+                            inputMode="numeric"
+                            maxLength={6}
+                            className="w-full rounded-xl border border-forest-800/20 px-4 py-2.5 text-sm"
+                          />
+                          {formErrors.pincode && (
+                            <p className="mt-1 text-xs text-red-600">{formErrors.pincode}</p>
+                          )}
+                        </div>
+                      </div>
+                      <label className="flex items-center gap-2 text-sm text-forest-800">
+                        <input
+                          type="checkbox"
+                          checked={formIsDefault}
+                          onChange={(e) => setFormIsDefault(e.target.checked)}
+                        />
+                        Set as default address
+                      </label>
+                      {formErrors.form && (
+                        <p role="alert" className="text-sm font-semibold text-red-600">
+                          {formErrors.form}
+                        </p>
+                      )}
+                      <div className="flex justify-end gap-2 pt-2">
+                        <Button type="button" variant="outline" onClick={closeForm}>
+                          Cancel
+                        </Button>
+                        <Button type="submit" disabled={savingAddress}>
+                          {savingAddress ? "Saving…" : "Save Address"}
+                        </Button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
             </div>
+
             <aside>
               <h3 className="mb-3 font-display text-base font-bold text-ink">
                 Quick Actions
               </h3>
               <nav aria-label="Quick actions" className="space-y-3">
+                <button
+                  type="button"
+                  onClick={handleQuickAddresses}
+                  className="group flex w-full items-center gap-4 rounded-xl border border-forest-800/10 bg-white p-4 text-left shadow-sm transition-colors hover:border-forest-800/25 hover:bg-forest-50"
+                >
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-forest-800/5 text-forest-700 transition-colors group-hover:bg-forest-800 group-hover:text-gold-400">
+                    <ClipboardText size={22} weight="bold" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-ink">
+                      Saved Addresses
+                    </span>
+                    <span className="block truncate text-xs text-forest-600">
+                      Manage your delivery addresses
+                    </span>
+                  </span>
+                  <ArrowRight
+                    size={18}
+                    weight="bold"
+                    aria-hidden="true"
+                    className="text-forest-500 transition-transform group-hover:translate-x-0.5"
+                  />
+                </button>
                 {actions.map((action) => (
                   <a
                     key={action.label}

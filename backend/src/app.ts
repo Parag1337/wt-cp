@@ -18,6 +18,11 @@ import paymentRouter from "./routes/payment.routes.js";
 export const app = express();
 
 app.disable("x-powered-by");
+// Render terminates TLS at its proxy; trust one proxy hop so rate limiting and
+// logging see the real client IP in production.
+if (env.nodeEnv === "production") {
+  app.set("trust proxy", 1);
+}
 
 app.use(
   cors({

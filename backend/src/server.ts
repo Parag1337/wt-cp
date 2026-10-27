@@ -3,8 +3,26 @@ import { env } from "./config/env.js";
 import { prisma } from "./config/prisma.js";
 import { reconcilePendingRazorpayOrders } from "./services/webhook.service.js";
 
-const server = app.listen(env.port, () => {
-  console.log(`[server] API listening on http://localhost:${env.port}`);
+const server = app.listen(env.port, "0.0.0.0", () => {
+  console.log(`[server] API listening on http://0.0.0.0:${env.port}`);
+
+  const razorpayKeyId = process.env.RAZORPAY_KEY_ID?.trim();
+  const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
+  const razorpayWebhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET?.trim();
+
+  if (!razorpayKeyId || !razorpayKeySecret) {
+    console.warn(
+      "[razorpay] Online payments are NOT configured: RAZORPAY_KEY_ID and/or RAZORPAY_KEY_SECRET are missing. Online payment option will be disabled."
+    );
+  } else {
+    console.log("[razorpay] Online payments configured (test or live key id present).");
+  }
+
+  if (!razorpayWebhookSecret) {
+    console.warn(
+      "[razorpay] Webhook processing is NOT configured: RAZORPAY_WEBHOOK_SECRET is missing. Webhook endpoint returns 503."
+    );
+  }
 });
 
 /**

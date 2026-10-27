@@ -102,6 +102,10 @@ export async function createRazorpayOrder(init: {
   amountPaise: number;
   receipt: string;
 }): Promise<{ razorpayOrderId: string; keyId: string; amountPaise: number }> {
+  if (!Number.isInteger(init.amountPaise) || init.amountPaise <= 0) {
+    throw new ApiError(400, "This order has no payable amount.");
+  }
+
   const client = getRazorpayClient();
   const keyId = process.env.RAZORPAY_KEY_ID;
 
@@ -110,10 +114,6 @@ export async function createRazorpayOrder(init: {
       503,
       "Online payments are not enabled right now. Choose Cash on Delivery or UPI."
     );
-  }
-
-  if (!Number.isInteger(init.amountPaise) || init.amountPaise <= 0) {
-    throw new ApiError(400, "This order has no payable amount.");
   }
 
   try {

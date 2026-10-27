@@ -11,16 +11,20 @@ export function ShopProductCard({ product }: { product: Product }) {
   const { addItem, isInCart } = useCart();
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState(false);
+  const [cartError, setCartError] = useState<string | null>(null);
 
   async function handleAddToCart(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
     if (!product.available) return;
     setAdding(true);
+    setCartError(null);
     try {
       await addItem(product.id, 1);
       setAdded(true);
       window.setTimeout(() => setAdded(false), 1600);
+    } catch (err) {
+      setCartError(err instanceof Error ? err.message : "Couldn't add to cart.");
     } finally {
       setAdding(false);
     }
@@ -118,6 +122,11 @@ export function ShopProductCard({ product }: { product: Product }) {
             </span>
           )}
         </div>
+        {cartError ? (
+          <p className="mt-2 text-xs font-medium text-red-600" role="alert">
+            {cartError}
+          </p>
+        ) : null}
       </div>
     </article>
   );

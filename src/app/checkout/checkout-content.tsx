@@ -92,6 +92,28 @@ export default function CheckoutContent() {
       })
       .catch(() => {});
   }, [authStatus]);
+  const [razorpayEnabled, setRazorpayEnabled] = useState(false);
+  const [paymentConfigLoaded, setPaymentConfigLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/payments/config", { credentials: "include" })
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        setRazorpayEnabled(Boolean(data?.razorpayEnabled));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRazorpayEnabled(false);
+      })
+      .finally(() => {
+        if (!cancelled) setPaymentConfigLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cod");
   const [paymentRef, setPaymentRef] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -349,11 +371,13 @@ export default function CheckoutContent() {
         <div className="rounded-2xl border border-forest-800/10 bg-white p-6">
           <h2 className="font-display text-lg font-bold text-ink">Payment Method</h2>
           <div className="mt-4 space-y-3" role="radiogroup" aria-label="Payment method">
-            {PAYMENT_METHODS.map((m) => (
+            {PAYMENT_METHODS.map((m) => {
+              const disabled = m.disabled || (m.value === "razorpay" && !razorpayEnabled);
+              return (
               <label
                 key={m.value}
                 className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${
-                  m.disabled
+                  disabled
                     ? "cursor-not-allowed opacity-50"
                     : paymentMethod === m.value
                       ? "border-forest-700 bg-forest-50/50"
@@ -364,7 +388,7 @@ export default function CheckoutContent() {
                   type="radio"
                   name="payment"
                   value={m.value}
-                  disabled={m.disabled}
+                  disabled={disabled}
                   checked={paymentMethod === m.value}
                   onChange={() => setPaymentMethod(m.value)}
                   className="mt-1 accent-green-900"
@@ -372,9 +396,14 @@ export default function CheckoutContent() {
                 <span>
                   <span className="block text-sm font-bold text-ink">{m.label}</span>
                   <span className="mt-0.5 block text-sm text-forest-700">{m.description}</span>
+                  {m.value === "razorpay" && !razorpayEnabled && paymentConfigLoaded && (
+                    <span className="mt-1 block text-xs font-semibold text-red-700">
+                      Online payments are temporarily unavailable. Choose Cash on Delivery or UPI.
+                    </span>
+                  )}
                 </span>
               </label>
-            ))}
+            );})}
           </div>
 
           {paymentMethod === "upi" && (

@@ -6,8 +6,23 @@ import {
   isWebhookVerificationEnabled,
   processRazorpayWebhook,
 } from "../services/webhook.service.js";
+import { getRazorpayClient } from "../services/payment.service.js";
 
 const router = Router();
+
+/**
+ * Public (non-secret) payment capability flags for the storefront.
+ * Only the public key id is ever exposed; secrets stay backend-only.
+ */
+router.get("/config", (_req, res) => {
+  const client = getRazorpayClient();
+  const keyId = process.env.RAZORPAY_KEY_ID?.trim() || null;
+  res.json({
+    success: true,
+    razorpayEnabled: client !== null && !!keyId,
+    keyId: client !== null ? keyId : null,
+  });
+});
 
 /**
  * Razorpay delivery endpoint. Unauthenticated by design — the HMAC over the

@@ -1,3 +1,37 @@
+import { ApiError } from "./auth";
+
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`/api${path}`, {
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers ?? {}),
+      },
+      ...options,
+    });
+  } catch {
+    throw new ApiError("Unable to reach the server. Please try again.");
+  }
+
+  const data = (await response.json().catch(() => null)) as
+    | (T & { message?: string; success?: boolean })
+    | null;
+
+  if (!response.ok) {
+    const message =
+      data && typeof data.message === "string"
+        ? data.message
+        : "Something went wrong. Please try again.";
+    throw new ApiError(message);
+  }
+  if (!data) {
+    throw new ApiError("Empty response from server.");
+  }
+  return data;
+}
+
 export type SavedAddress = {
   id: number;
   customerId: number;
@@ -18,34 +52,28 @@ export type AddressResponse = { success: boolean; address: SavedAddress };
 
 export const addressApi = {
   list(): Promise<AddressListResponse> {
-    return fetch("/api/addresses", { credentials: "include" }).then((r) => r.json());
+    return request<AddressListResponse>("/addresses");
   },
-  create(payload: Partial<SavedAddress> & Record<string, unknown>): Promise<AddressResponse> {
-    return fetch("/api/addresses", {
+  create(payload: Record<string, unknown>): Promise<AddressResponse> {
+    return request<AddressResponse>("/addresses", {
       method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-    }).then((r) => r.json());
+    });
   },
   update(id: number, payload: Record<string, unknown>): Promise<AddressResponse> {
-    return fetch(`/api/addresses/${id}`, {
+    return request<AddressResponse>(`/addresses/${id}`, {
       method: "PUT",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-    }).then((r) => r.json());
+    });
   },
   remove(id: number): Promise<{ success: boolean }> {
-    return fetch(`/api/addresses/${id}`, {
+    return request<{ success: boolean }>(`/addresses/${id}`, {
       method: "DELETE",
-      credentials: "include",
-    }).then((r) => r.json());
+    });
   },
   setDefault(id: number): Promise<AddressResponse> {
-    return fetch(`/api/addresses/${id}/default`, {
+    return request<AddressResponse>(`/addresses/${id}/default`, {
       method: "POST",
-      credentials: "include",
-    }).then((r) => r.json());
+    });
   },
 };

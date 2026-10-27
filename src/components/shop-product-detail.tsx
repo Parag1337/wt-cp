@@ -22,6 +22,7 @@ export function ShopProductDetail() {
   const [quantity, setQuantity] = useState(1);
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState(false);
+  const [cartError, setCartError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isNaN(id)) return;
@@ -47,10 +48,13 @@ export function ShopProductDetail() {
   async function handleAddToCart() {
     if (!product || !isPurchasable(product)) return;
     setAdding(true);
+    setCartError(null);
     try {
       await addItem(product.id, quantity);
       setAdded(true);
       window.setTimeout(() => setAdded(false), 1600);
+    } catch (err) {
+      setCartError(err instanceof Error ? err.message : "Couldn't add to cart.");
     } finally {
       setAdding(false);
     }
@@ -181,7 +185,11 @@ export function ShopProductDetail() {
                   <CheckCircle size={18} weight="bold" aria-hidden="true" />
                 ) : (
                   <ShoppingCart size={18} weight="bold" aria-hidden="true" />
-                )}
+                )}\n           {cartError ? (
+             <p className="mt-4 text-sm font-medium text-red-600" role="alert">
+               {cartError}
+             </p>
+           ) : null}
                 {adding
                   ? "Adding..."
                   : inCart
